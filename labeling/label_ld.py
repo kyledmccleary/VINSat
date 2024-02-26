@@ -9,31 +9,32 @@ import cv2
 
 def parse_args():
     """
-    Parse command line arguments for labeling Landsat Data.
+    Parse command line arguments for labeling Data.
 
     Returns:
         args (argparse.Namespace): Parsed command line arguments.
     """
-    parser = argparse.ArgumentParser(description='Labeling Landsat Data')
-    parser.add_argument('--label_path', type=str, required=True, help='Path to label file')
+    parser = argparse.ArgumentParser(description='Labeling Data')
+    parser.add_argument('--landmark_path', type=str, required=True, help='Path to landmark file')
     parser.add_argument('--raster_dir_path', type=str, required=True, help='Path to raster file')
     parser.add_argument('--output_dir_path', type=str, required=True, help='Path to save labels')
     parser.add_argument('-v', '--viz_labels', action='store_true', help='Visualize labels')
+    parser.add_argument('-c', '--calculate_labels', action='store_true', help='Calculate labels')
     parsed_args = parser.parse_args()
     return parsed_args
 
-def get_labels(label_path):
+def get_landmarks(landmark_path):
     """
-    Load labels from a given file path.
+    Load landmarks from a given file path.
 
     Parameters:
-    label_path (str): The path to the label file.
+    landmark_path (str): The path to the landmark file.
 
     Returns:
-    numpy.ndarray: The loaded labels.
+    numpy.ndarray: The loaded landmarks.
     """
-    loaded_labels = np.load(label_path)
-    return loaded_labels
+    loaded_landmarks = np.load(landmark_path)
+    return loaded_landmarks
 
 def get_raster_paths(raster_dir_path):
     """
@@ -59,9 +60,9 @@ def label_raster(raster_path):
         im_height = src.height
         im = src.read().transpose(1, 2, 0)
         proj = pyproj.Proj(crs)
-        cxs, cys = proj(labels[:, 0], labels[:, 1])
-        lefts, bots = proj(labels[:, 2], labels[:, 3])
-        rights, tops = proj(labels[:, 4], labels[:, 5])
+        cxs, cys = proj(landmarks[:, 0], landmarks[:, 1])
+        lefts, bots = proj(landmarks[:, 2], landmarks[:, 3])
+        rights, tops = proj(landmarks[:, 4], landmarks[:, 5])
         cvs, cus = src.index(cxs, cys)
         tlv, tlu = src.index(lefts, tops)
         brv, bru = src.index(rights, bots)
@@ -136,7 +137,7 @@ def visualize_label(label_path, image_path):
     return im
 
 args = parse_args()
-labels = get_labels(args.label_path)
+landmarks = get_landmarks(args.landmark_path)
 raster_paths = get_raster_paths(args.raster_dir_path)
 output_path = args.output_dir_path
 

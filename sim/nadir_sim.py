@@ -99,19 +99,21 @@ def get_detections(img, region, window_transform, cam):
     model = YOLO(model_path)
     conf_threshold = float(np.load('best_confs/' + region + '_best_conf.npy'))
     best_classes = np.load('best_classes/' + region + '_best_classes.npy')
+    bad_classes = np.load('bad_classes/' + region + '_bad_classes.npy')
     results = model.predict(img, conf=conf_threshold, classes=best_classes, imgsz=(2592, 4608), verbose=False)
     result = results[0]
     im_region_dets = []
     if len(result.boxes) > 0:
         for detection in result.boxes:
             cls = int(detection.cls.item())
-            xc, yc, w, h, = detection.xywh[0]
-            xc, yc, w, h = xc.item(), yc.item(), w.item(), h.item()
-            det_lon, det_lat = cam.convert_xc_yc_to_lon_lat(xc, yc, window_transform)
-            cls_lon, cls_lat = get_lon_lat_from_cls(cls, region)
-            det_pixel_location = cam.lonlat_to_pixel_coords(det_lon, det_lat)
-            cls_pixel_location = cam.lonlat_to_pixel_coords(cls_lon, cls_lat)
-            im_region_dets.append([cls, det_pixel_location[0], det_pixel_location[1], detection.conf.item()])
+            if cls not in bad_classes:
+                xc, yc, w, h, = detection.xywh[0]
+                xc, yc, w, h = xc.item(), yc.item(), w.item(), h.item()
+                det_lon, det_lat = cam.convert_xc_yc_to_lon_lat(xc, yc, window_transform)
+                cls_lon, cls_lat = get_lon_lat_from_cls(cls, region)
+                det_pixel_location = cam.lonlat_to_pixel_coords(det_lon, det_lat)
+                cls_pixel_location = cam.lonlat_to_pixel_coords(cls_lon, cls_lat)
+                im_region_dets.append([cls, det_pixel_location[0], det_pixel_location[1], detection.conf.item()])
         return im_region_dets
     else:
         return None
@@ -196,14 +198,13 @@ def run_sim(orbit_num):
         #     img= satcam.get_image(1)
         if satcam.check_for_all_landmarks():
             # in_timesteps[i] = True
-            ctr_region = satcam.get_region(lons[i], lats[i])
-            satim, window_transform = satcam.get_image(ctr_region)      
-            if satim is not None:
+            #ctr_region = satcam.get_region(lons[i], lats[i])
+            #satim, window_transform = satcam.get_image(ctr_region)      
+            #if satim is not None:
                 satim = cv2.cvtColor(satim, cv2.COLOR_RGB2BGR)
                 for region in satcam.current_regions:
                     if region in regions:
-                        if region != ctr_region:
-                            continue
+                        satim, window_transform = satcam.get_image(region) 
                         dets = get_detections(satim, region, window_transform, satcam)
                         if savevid:
                             satim_h, satim_w, _ = satim.shape
@@ -245,7 +246,10 @@ def run_sim(orbit_num):
     if len(err_arr.shape) > 1:
         xs = np.float32(err_arr[:,1])
         ys = np.float32(err_arr[:,2])
-        print(np.mean(xs), np.mean(ys))
+        print('Orbit #', str(i))
+        print('Mean x error:', np.mean(xs), 'Mean y error:', np.mean(ys))
+        print('Median x error:', np.median(xs), 'Median y error:', np.median(ys))
+        print('Max x error:', np.max(xs), 'Max y error:', np.max(ys))
     np.save(detection_path + '/' + str(orbit_num).zfill(5) + '_errs.npy', err_arr)
     #print(sum(in_timesteps))
         
@@ -262,5 +266,5 @@ def run_sim(orbit_num):
     #     f.write(out)
 
 if __name__ == '__main__':
-    iterable = range(1, 300)
+    iterable = range(125, 130)
     process_map(run_sim, iterable, max_workers=3, chunksize=1)

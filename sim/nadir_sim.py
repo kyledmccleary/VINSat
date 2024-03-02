@@ -137,7 +137,7 @@ def eval_px_error(cls, lon, lat, xc, yc, cam):
     
 def run_sim(orbit_num):
     grid = getMGRS()
-    orbit_ecef, orbit_eci, tsamp, orbit_eci_q = get_orbit(10800)
+    orbit_ecef, orbit_eci, tsamp, orbit_eci_q = get_orbit(1000)
     nadir_attitude = get_nadir_attitude(orbit_eci)
     dir_vec, up_vec, right_vec = get_nadir_attitude_vectors(orbit_ecef)
     dir_vec_eci, up_vec_eci, right_vec_eci = get_nadir_attitude_vectors(orbit_eci)
@@ -201,43 +201,55 @@ def run_sim(orbit_num):
             #ctr_region = satcam.get_region(lons[i], lats[i])
             #satim, window_transform = satcam.get_image(ctr_region)      
             #if satim is not None:
-                satim = cv2.cvtColor(satim, cv2.COLOR_RGB2BGR)
-                for region in satcam.current_regions:
-                    if region in regions:
-                        satim, window_transform = satcam.get_image(region) 
-                        dets = get_detections(satim, region, window_transform, satcam)
-                        if savevid:
-                            satim_h, satim_w, _ = satim.shape
-                            outim = cv2.resize(satim.copy(), (vid_w, vid_h))
-                            scale_w = vid_w / satim_w
-                            scale_h = vid_h / satim_h
-                        if dets is not None:
-                            for det in dets:
-                                cls, xc, yc, conf = det
-                                lon, lat = get_lon_lat_from_cls(int(cls), region)
-                                i = int(i)
-                                lon = float(lon)
-                                lat = float(lat)
-                                xc = float(xc)
-                                yc = float(yc)
-                                conf = float(conf)
-                                all_detections.append([i, lon, lat, xc, yc, conf])
+            corner_lonlats = satcam.corner_lonlats
+            tl_lon, tl_lat = corner_lonlats['tl']
+            br_lon, br_lat = corner_lonlats['br']
+            tr_lon, tr_lat = corner_lonlats['tr']
+            bl_lon, bl_lat = corner_lonlats['bl']
+            tl_reg = satcam.get_region(tl_lon, tl_lat)
+            br_reg = satcam.get_region(br_lon, br_lat)
+            tr_reg = satcam.get_region(tr_lon, tr_lat)
+            bl_reg = satcam.get_region(bl_lon, bl_lat)
+            ctr_reg = satcam.get_region(lons[i], lats[i])
+            cur_regions = [tl_reg, tr_reg, br_reg, bl_reg, ctr_reg]
+            big_satim = None
+            for region in cur_regions:
+                if region in regions:
+                    satim, window_transform = satcam.get_image(region) 
+                    satim = cv2.cvtColor(satim, cv2.COLOR_RGB2BGR)
+                    dets = get_detections(satim, region, window_transform, satcam)
+                    if savevid:
+                        if big_satim is None:
+                            big_satim = satim.copy()
+                        else:
+                            big_satim += satim.copy()
+                    if dets is not None:
+                        for det in dets:
+                            cls, xc, yc, conf = det
+                            lon, lat = get_lon_lat_from_cls(int(cls), region)
+                            i = int(i)
+                            lon = float(lon)
+                            lat = float(lat)
+                            xc = float(xc)
+                            yc = float(yc)
+                            conf = float(conf)
+                            all_detections.append([i, lon, lat, xc, yc, conf])
+                            if check_err:
+                                x_err, y_err, lon_px, lat_px = eval_px_error(cls, lon, lat, xc, yc, satcam)
+                                errs.append([i, x_err, y_err, cls, region, conf])
+                            if savevid or showim:
+                                #outim = cv2.putText(outim, str(int(cls)), (int(xc*scale), int(yc*scale)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 1)
+                                outim = cv2.circle(outim, (int(xc*scale_w), int(yc*scale_h)), 2, (0,255,0), -1)        
                                 if check_err:
-                                    x_err, y_err, lon_px, lat_px = eval_px_error(cls, lon, lat, xc, yc, satcam)
-                                    errs.append([i, x_err, y_err, cls, region, conf])
-                                if savevid or showim:
-                                    #outim = cv2.putText(outim, str(int(cls)), (int(xc*scale), int(yc*scale)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 1)
-                                    outim = cv2.circle(outim, (int(xc*scale_w), int(yc*scale_h)), 2, (0,255,0), -1)        
-                                    if check_err:
-                                        outim = cv2.circle(outim, (int(lon_px*scale_w), int(lat_px*scale_h)), 2, (0,0,255), -1)
-                                        outim = cv2.line(outim, (int(xc*scale_w), int(yc*scale_h)), (int(lon_px*scale_w), int(lat_px*scale_h)), (255,0,0), 1)                                  
-                if savevid:
-                    if video is None:
-                        video = cv2.VideoWriter('orbits/demos/' + vidname, 0, 5, (vid_w,vid_h))
-                    
-                    video.write(outim)
-                if showim:
-                    cv2.imshow('satim', outim)
+                                    outim = cv2.circle(outim, (int(lon_px*scale_w), int(lat_px*scale_h)), 2, (0,0,255), -1)
+                                    outim = cv2.line(outim, (int(xc*scale_w), int(yc*scale_h)), (int(lon_px*scale_w), int(lat_px*scale_h)), (255,0,0), 1)                                  
+            if savevid:
+                if video is None:
+                    video = cv2.VideoWriter('orbits/demos/' + vidname, 0, 5, (vid_w,vid_h))
+                
+                video.write(outim)
+            if showim:
+                cv2.imshow('satim', outim)
             satim = None
 
 

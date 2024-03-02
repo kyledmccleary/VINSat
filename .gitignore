@@ -1,2 +1,14 @@
 eval/val/
 training/datasets/*
+training/runs/*
+training/yolov8*.pt
+sim/region_ims/*
+sim/region_ims_4326/*
+sim/orbits/czm/*
+sim/orbits/demos/*
+eval/test_dataset/*
+01000_pose_skip.json
+*/__pycache__/*
+*.ipynb
+sim/orbits/detections/*
+sim/*.avi

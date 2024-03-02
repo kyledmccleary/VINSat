@@ -142,4 +142,4 @@ raster_paths = get_raster_paths(args.raster_dir_path)
 output_path = args.output_dir_path
 
 if __name__ == '__main__':
-    process_map(label_raster, raster_paths, max_workers=8)
+    process_map(label_raster, raster_paths, max_workers=8, chunksize=1)

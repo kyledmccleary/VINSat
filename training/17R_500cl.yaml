@@ -1,0 +1,5 @@
+train: 17R_s15_500\train\images
+val: 17R_s15_500\val\images
+
+nc: 500
+

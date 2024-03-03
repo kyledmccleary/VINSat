@@ -15,15 +15,12 @@ import numpy as np
 from astropy.coordinates import EarthLocation
 from matplotlib import pyplot as plt
 from SatCam import SatCam, SatellitePose
-import json
 from getMGRS import getMGRS
 import cv2
-from tqdm import tqdm
 from ultralytics import YOLO
-import torch
 import csv
 from tqdm.contrib.concurrent import process_map
-from multiprocessing import current_process
+import os
 
 def get_eci_orbit(tf=None):
     """
@@ -99,7 +96,10 @@ def get_detections(img, region, window_transform, cam):
     model = YOLO(model_path)
     conf_threshold = float(np.load('best_confs/' + region + '_best_conf.npy'))
     best_classes = np.load('best_classes/' + region + '_best_classes.npy')
-    bad_classes = np.load('bad_classes/' + region + '_bad_classes.npy')
+    if os.path.exists('bad_classes/' + region + '_bad_classes.npy'):
+        bad_classes = np.load('bad_classes/' + region + '_bad_classes.npy')
+    else:
+        bad_classes = []
     results = model.predict(img, conf=conf_threshold, classes=best_classes, imgsz=(2592, 4608), verbose=False)
     result = results[0]
     im_region_dets = []
@@ -137,7 +137,7 @@ def eval_px_error(cls, lon, lat, xc, yc, cam):
     
 def run_sim(orbit_num):
     grid = getMGRS()
-    orbit_ecef, orbit_eci, tsamp, orbit_eci_q = get_orbit(1000)
+    orbit_ecef, orbit_eci, tsamp, orbit_eci_q = get_orbit(10800)
     nadir_attitude = get_nadir_attitude(orbit_eci)
     dir_vec, up_vec, right_vec = get_nadir_attitude_vectors(orbit_ecef)
     dir_vec_eci, up_vec_eci, right_vec_eci = get_nadir_attitude_vectors(orbit_eci)
@@ -153,7 +153,7 @@ def run_sim(orbit_num):
     lats, lons, alt = get_ground_track(nadir_orbit_ecef)
     #in_timesteps = np.zeros(len(lats), dtype=bool)
 
-    regions = ['10S', '10T', '11R', '12R', '16T', '17R', #'17T', '18S', 
+    regions = ['10S', '10T', '11R', '12R', '16T', '17R', '17T', '18S', 
                 '32S', '32T', '33S', '33T', '52S', '53S', '54S', '54T']
 
     
@@ -163,8 +163,8 @@ def run_sim(orbit_num):
     satcam = None
     im_w = 4608
     im_h = 2592
-    vid_w = 1920
-    vid_h = 1080
+    vid_w = 576
+    vid_h = 324
     vidname = str(orbit_num).zfill(5) + 'demo.avi'
 
     if savevid:
@@ -239,17 +239,17 @@ def run_sim(orbit_num):
                                 errs.append([i, x_err, y_err, cls, region, conf])
                             if savevid or showim:
                                 #outim = cv2.putText(outim, str(int(cls)), (int(xc*scale), int(yc*scale)), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 1)
-                                outim = cv2.circle(outim, (int(xc*scale_w), int(yc*scale_h)), 2, (0,255,0), -1)        
+                                outim = cv2.circle(big_satim, (int(xc), int(yc)), 2, (0,255,0), -1)        
                                 if check_err:
-                                    outim = cv2.circle(outim, (int(lon_px*scale_w), int(lat_px*scale_h)), 2, (0,0,255), -1)
-                                    outim = cv2.line(outim, (int(xc*scale_w), int(yc*scale_h)), (int(lon_px*scale_w), int(lat_px*scale_h)), (255,0,0), 1)                                  
+                                    outim = cv2.circle(big_satim, (int(lon_px), int(lat_px)), 2, (0,0,255), -1)
+                                    outim = cv2.line(big_satim, (int(xc), int(yc)), (int(lon_px), int(lat_px)), (255,0,0), 1)                                  
             if savevid:
                 if video is None:
                     video = cv2.VideoWriter('orbits/demos/' + vidname, 0, 5, (vid_w,vid_h))
                 
-                video.write(outim)
+                video.write(big_satim)
             if showim:
-                cv2.imshow('satim', outim)
+                cv2.imshow('satim', big_satim)
             satim = None
 
 
@@ -258,7 +258,7 @@ def run_sim(orbit_num):
     if len(err_arr.shape) > 1:
         xs = np.float32(err_arr[:,1])
         ys = np.float32(err_arr[:,2])
-        print('Orbit #', str(i))
+        print('Orbit #', str(orbit_num).zfill(5))
         print('Mean x error:', np.mean(xs), 'Mean y error:', np.mean(ys))
         print('Median x error:', np.median(xs), 'Median y error:', np.median(ys))
         print('Max x error:', np.max(xs), 'Max y error:', np.max(ys))
@@ -278,5 +278,5 @@ def run_sim(orbit_num):
     #     f.write(out)
 
 if __name__ == '__main__':
-    iterable = range(125, 130)
+    iterable = range(160, 170)
     process_map(run_sim, iterable, max_workers=3, chunksize=1)

@@ -215,7 +215,7 @@ def run_sim(orbit_num):
             big_satim = None
             for region in cur_regions:
                 if region in regions:
-                    satim, window_transform = satcam.get_image(region) 
+                    satim, window_transform = satcam.get_image(region)
                     satim = cv2.cvtColor(satim, cv2.COLOR_RGB2BGR)
                     dets = get_detections(satim, region, window_transform, satcam)
                     if savevid:
@@ -278,5 +278,5 @@ def run_sim(orbit_num):
     #     f.write(out)
 
 if __name__ == '__main__':
-    iterable = range(160, 170)
-    process_map(run_sim, iterable, max_workers=3, chunksize=1)
+    iterable = range(233, 236)
+    process_map(run_sim, iterable, max_workers=1, chunksize=1)

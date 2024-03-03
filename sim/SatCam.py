@@ -279,42 +279,123 @@ class SatCam:
             self.region_im_dict[region] = np.random.choice(os.listdir('region_ims/' + region))
         return self.region_im_dict[region]
 
-    def get_image(self, ctr_region):
+    def get_image(self, region):
         base_path = 'region_ims'
-        if ctr_region in self.regions:
-            region_path = os.path.join(base_path, ctr_region)
-            regim = self.choose_region_im(ctr_region)
-            regim_path = os.path.join(region_path, regim)
+        if region in self.regions:
+            if self.region_ims[region] is None:
+                region_path = os.path.join(base_path, region)
+                regim = self.choose_region_im(region)
+                regim_path = os.path.join(region_path, regim)
+                with rasterio.open(regim_path) as src:
+                    t = src.transform
+                    data = src.read((1,2,3))
+                    data = np.moveaxis(data, 0, -1)
+                    self.region_ims[region] = data, t
+            else:
+                data, t = self.region_ims[region]
         else:
             return None, None
+        
         corner_lonlats = self.corner_lonlats
         tl_lon, tl_lat = corner_lonlats['tl']
         tr_lon, tr_lat = corner_lonlats['tr']
         bl_lon, bl_lat = corner_lonlats['bl']
         br_lon, br_lat = corner_lonlats['br']
 
-        # Get minimum and maximum lonlats
-        min_lon = min(tl_lon, bl_lon)
-        max_lon = max(tr_lon, br_lon)
-        min_lat = min(bl_lat, br_lat)
-        max_lat = max(tl_lat, tr_lat)
+        min_lon = min([tl_lon, tr_lon, bl_lon, br_lon])
+        max_lon = max([tl_lon, tr_lon, bl_lon, br_lon])
+        min_lat = min([tl_lat, tr_lat, bl_lat, br_lat])
+        max_lat = max([tl_lat, tr_lat, bl_lat, br_lat])
 
-        # make projector from epsg:4326 to epsg:3857
         p = pyproj.Proj('EPSG:3857')
-
-        # Convert lonlats to xys
         min_x, min_y = p(min_lon, min_lat)
         max_x, max_y = p(max_lon, max_lat)
 
-        # Open the raster image
-        with rasterio.open(regim_path) as src:
-            t = src.transform
-            window = from_bounds(min_x, min_y, max_x, max_y, t) # get window from bounds
-            window_transform = rasterio.windows.transform(window, t) # get transform from window
-            windowed_im = src.read(window=window, boundless=True) # read the windowed image
-            windowed_im = np.moveaxis(windowed_im, 0, -1)   # move axis to (h, w, 3)
+        satim, window_transform = self.get_windowed_image(data, min_x, min_y, max_x, max_y, t)
+        return satim, window_transform
+
+    def get_windowed_image(self, data, min_x, min_y, max_x, max_y, t):
         
-        return windowed_im, window_transform
+        window = from_bounds(min_x, min_y, max_x, max_y, t)
+        window_transform = rasterio.windows.transform(window, t)
+
+        min_x_px, min_y_px = ~t*(min_x, max_y)
+        max_x_px, max_y_px = ~t*(max_x, min_y)
+        
+        min_x_px = int(min_x_px)
+        min_y_px = int(min_y_px)
+        max_x_px = int(max_x_px)
+        max_y_px = int(max_y_px)
+        
+        im_h = int(max_y_px - min_y_px)
+        im_w = int(max_x_px - min_x_px)
+
+        image = np.zeros((im_h, im_w, data.shape[2]), dtype=data.dtype)
+        data_h, data_w, _ = data.shape
+
+        data_min_x_px = max(0, min_x_px)
+        data_max_x_px = min(data_w, max_x_px)
+        data_min_y_px = max(0, min_y_px)
+        data_max_y_px = min(data_h, max_y_px)
+
+        if min_x_px < 0:
+            im_min_x_px = -min_x_px
+        else:
+            im_min_x_px = 0
+        if min_y_px < 0:
+            im_min_y_px = -min_y_px
+        else:
+            im_min_y_px = 0
+        if max_x_px > data_w:
+            im_max_x_px = int(im_w - (max_x_px - data_w))
+        else:
+            im_max_x_px = im_w
+        if max_y_px > data_h:
+            im_max_y_px = int(im_h - (max_y_px - data_h))
+        else:
+            im_max_y_px = im_h
+
+        image[im_min_y_px:im_max_y_px, im_min_x_px:im_max_x_px] = data[data_min_y_px:data_max_y_px, data_min_x_px:data_max_x_px]
+
+        return image, window_transform
+    
+    
+    # def get_image(self, ctr_region):
+    #     base_path = 'region_ims'
+    #     if ctr_region in self.regions:
+    #         region_path = os.path.join(base_path, ctr_region)
+    #         regim = self.choose_region_im(ctr_region)
+    #         regim_path = os.path.join(region_path, regim)
+    #     else:
+    #         return None, None
+    #     corner_lonlats = self.corner_lonlats
+    #     tl_lon, tl_lat = corner_lonlats['tl']
+    #     tr_lon, tr_lat = corner_lonlats['tr']
+    #     bl_lon, bl_lat = corner_lonlats['bl']
+    #     br_lon, br_lat = corner_lonlats['br']
+
+    #     # Get minimum and maximum lonlats
+    #     min_lon = min(tl_lon, bl_lon)
+    #     max_lon = max(tr_lon, br_lon)
+    #     min_lat = min(bl_lat, br_lat)
+    #     max_lat = max(tl_lat, tr_lat)
+
+    #     # make projector from epsg:4326 to epsg:3857
+    #     p = pyproj.Proj('EPSG:3857')
+
+    #     # Convert lonlats to xys
+    #     min_x, min_y = p(min_lon, min_lat)
+    #     max_x, max_y = p(max_lon, max_lat)
+
+    #     # Open the raster image
+    #     with rasterio.open(regim_path) as src:
+    #         t = src.transform
+    #         window = from_bounds(min_x, min_y, max_x, max_y, t) # get window from bounds
+    #         window_transform = rasterio.windows.transform(window, t) # get transform from window
+    #         windowed_im = src.read(window=window, boundless=True) # read the windowed image
+    #         windowed_im = np.moveaxis(windowed_im, 0, -1)   # move axis to (h, w, 3)
+        
+    #     return windowed_im, window_transform
         
 
 

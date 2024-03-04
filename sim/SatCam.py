@@ -279,6 +279,58 @@ class SatCam:
             self.region_im_dict[region] = np.random.choice(os.listdir('region_ims/' + region))
         return self.region_im_dict[region]
 
+    # def get_image(self):
+    #     base_path = 'region_ims'
+    #     self.find_current_regions()
+    #     regims = []
+    #     for region in self.current_regions:
+    #         if region is None:
+    #             continue
+    #         region_path = os.path.join(base_path, region)
+    #         if os.path.exists(region_path):
+    #             random_regim = self.choose_region_im(region)
+    #             regim_path = os.path.join(region_path, random_regim)
+    #             regims.append(regim_path)
+    #     corner_lonlats = self.corner_lonlats
+    #     data, affine = rasterio.merge.merge(regims)
+    #     data = np.moveaxis(data, 0, -1)
+    #     transformer = rasterio.transform.AffineTransformer(affine)
+    #     tl_lon, tl_lat = corner_lonlats['tl']
+    #     tr_lon, tr_lat = corner_lonlats['tr']
+    #     bl_lon, bl_lat = corner_lonlats['bl']
+    #     br_lon, br_lat = corner_lonlats['br']
+
+    #     p = pyproj.Proj('EPSG:3857')
+
+    #     tl_x, tl_y = p(tl_lon, tl_lat)
+    #     tr_x, tr_y = p(tr_lon, tr_lat)
+    #     bl_x, bl_y = p(bl_lon, bl_lat)
+    #     br_x, br_y = p(br_lon, br_lat)
+
+    #     max_x = max([tl_x, tr_x, bl_x, br_x])
+    #     max_y = max([tl_y, tr_y, bl_y, br_y])
+    #     min_x = min([tl_x, tr_x, bl_x, br_x])
+    #     min_y = min([tl_y, tr_y, bl_y, br_y])
+
+    #     tl_y_px, tl_x_px = transformer.rowcol(tl_x, tl_y)
+    #     tr_y_px, tr_x_px = transformer.rowcol(tr_x, tr_y)
+    #     bl_y_px, bl_x_px = transformer.rowcol(bl_x, bl_y)
+    #     br_y_px, br_x_px = transformer.rowcol(br_x, br_y)
+
+    #     max_x_px = max([tl_x_px, tr_x_px, bl_x_px, br_x_px])
+    #     min_x_px = min([tl_x_px, tr_x_px, bl_x_px, br_x_px])
+    #     max_y_px = max([tl_y_px, tr_y_px, bl_y_px, br_y_px])
+    #     min_y_px = min([tl_y_px, tr_y_px, bl_y_px, br_y_px])
+
+    #     #print(max_x_px, min_x_px, max_y_px, min_y_px)
+
+    #     im = data[min_y_px:max_y_px, min_x_px:max_x_px]
+    #     window = from_bounds(min_x, min_y, max_x, max_y, affine)
+    #     window_transform = rasterio.windows.transform(window, affine)
+    #     return im, window_transform
+    
+    
+    
     def get_image(self, region):
         base_path = 'region_ims'
         if region in self.regions:
@@ -322,13 +374,13 @@ class SatCam:
         min_x_px, min_y_px = ~t*(min_x, max_y)
         max_x_px, max_y_px = ~t*(max_x, min_y)
         
-        min_x_px = int(min_x_px)
-        min_y_px = int(min_y_px)
-        max_x_px = int(max_x_px)
-        max_y_px = int(max_y_px)
+        min_x_px = round(min_x_px)
+        min_y_px = round(min_y_px)
+        max_x_px = round(max_x_px)
+        max_y_px = round(max_y_px)
         
-        im_h = int(max_y_px - min_y_px)
-        im_w = int(max_x_px - min_x_px)
+        im_h = round(max_y_px - min_y_px)
+        im_w = round(max_x_px - min_x_px)
 
         image = np.zeros((im_h, im_w, data.shape[2]), dtype=data.dtype)
         data_h, data_w, _ = data.shape

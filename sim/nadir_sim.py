@@ -202,10 +202,10 @@ def eval_px_error(cls, lon, lat, xc, yc, cam):
     y_err = np.abs(yc - lat_px)
     return x_err, y_err, lon_px, lat_px
 
-    
+
 def run_sim(cur_iter, orbit_num):
     grid = getMGRS()
-    orbit_ecef, orbit_eci, tsamp, orbit_eci_q = get_orbit(21600)
+    orbit_ecef, orbit_eci, tsamp, orbit_eci_q = get_orbit(54000)
     nadir_attitude = get_nadir_attitude(orbit_eci)
     dir_vec, up_vec, right_vec = get_nadir_attitude_vectors(orbit_ecef)
     dir_vec_eci, up_vec_eci, right_vec_eci = get_nadir_attitude_vectors(orbit_eci)
@@ -248,10 +248,13 @@ def run_sim(cur_iter, orbit_num):
     errs = []
     in_region = False
     satim = None
+
+    im_sample_rate = 1
+
     with tqdm(total=len(nadir_orbit_ecef), desc='Orbit #' + str(orbit_num).zfill(5), position=cur_iter) as pbar:
         for i, pose in enumerate(nadir_orbit_ecef):   
-            # if i % 5 != 0:
-            #     continue 
+            if i % im_sample_rate != 0:
+                continue 
             # if i == 0:
             #     if lat[i+1] < lat[i]:
             #         continue
@@ -352,10 +355,11 @@ def run_sim(cur_iter, orbit_num):
                 if satim is not None and in_region is False:
                     in_region = True
                     cur_region = satcam.get_region(lons[i], lats[i])
-                elif satim is None and in_region is True:
-                    if satcam.get_region(lons[i], lats[i]) != cur_region:
-                        in_region = False
-                        region_pass_count += 1
+                elif satim is None and in_region is True:                
+                    in_region = False
+                    region_pass_count += 1
+                elif satim is not None and in_region is True:
+                    pass
                 else:
                     in_region = False
                 if savevid: #and big_satim is not None:
@@ -372,7 +376,7 @@ def run_sim(cur_iter, orbit_num):
                 break
             elif region_pass_count > 1 and i > 21600:
                 break
-            pbar.update(1)
+            pbar.update(im_sample_rate)
         np.save(detection_path + '/' + str(orbit_num).zfill(5) + '_inlier_detections.npy', inlier_detections)
         np.save(detection_path + '/' + str(orbit_num).zfill(5) + '_all_detections.npy', all_detections)   
         

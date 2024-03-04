@@ -19,7 +19,7 @@ def BA(iter, states, velocities, imu_meas, landmarks, landmarks_xyz, ii, time_id
 		r_pred, pose_pred, vel_pred, Ji, Ji_1, Jf, Hq, qgrad = predict(states, imu_meas, time_idx, quat_coeff, vel_coeff, jacobian=True, initialize=initialize)
 	
 	r_obs = (landmarks - landmark_est)
-	alpha = min(max(1 - (2*(iter/5) - 1), 1), 2)
+	alpha = 1#min(max(1 - (2*(iter/5) - 1), 1), 2)
 	c_obs = r_obs.abs().median()
 	wts_obs = (((((r_obs/c_obs)**2)/abs(alpha-2) + 1)**(alpha/2 - 1)) / ((c_obs)**2)).mean(dim=-1).unsqueeze(-1).unsqueeze(-1)[0]
 	wts_obs = (wts_obs/wts_obs.max())*confidences.unsqueeze(-1).unsqueeze(-1)#*0 + 1

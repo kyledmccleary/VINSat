@@ -1,7 +1,8 @@
 import numpy as np
 import ipdb
 import matplotlib.pyplot as plt
-        
+import os
+
 def time_to_error():
     time_for_1 = []
     time_for_2 = []
@@ -17,9 +18,25 @@ def time_to_error():
     ipdb.set_trace()
 
 def time_to_error_hist():
-    folder = "landmarks/camera_ready/dets_and_poses"
-    errors = np.load(folder + '/errors.npy', allow_pickle=True)
-    times = np.load(folder + '/times.npy', allow_pickle=True)
+    folder = "landmarks/camera_ready/dets_and_poses_thres_fixed"
+    # folder = "landmarks/camera_ready/orbits"
+    # list all np arrays in the folder
+    files = os.listdir(folder)
+    # filter for npy files
+    files = [f for f in files if f.endswith('.npy')]
+    # sort the files
+    files.sort()
+    errors = []
+    times = []
+    for f in files:
+        if 'errors' in f:
+            errors+=list(np.load(folder + '/' + f, allow_pickle=True))
+            times+=list(np.load(folder + '/' + f.replace('errors', 'times'), allow_pickle=True))
+    # ipdb.set_trace()
+    # errors = np.concatenate(errors)
+    # times = np.concatenate(times)
+    # errors = np.load(folder + '/errors.npy', allow_pickle=True)
+    # times = np.load(folder + '/times.npy', allow_pickle=True)
     num_trajs = len(errors)
     time_for_5 = []
     for i in range(num_trajs):
@@ -47,7 +64,7 @@ def time_to_error_hist():
     plt.ylim(0, 1)  # Ensure y-axis goes from 0 to 1 to represent the full range of fractions
     plt.grid(True)
     plt.legend()
-    plt.savefig('time_to_5.png')
+    plt.savefig('time_to_5_orbits75.png')
 
 
 if __name__ == '__main__':

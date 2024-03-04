@@ -207,6 +207,9 @@ def read_detections(sample_dets=False, detections=None, orbit_np=None, orbit_fil
     # mask = ((landmarks[:,0] <5072)*1.0 + (landmarks[:,0] > 9600)*1.0) > 0
     # mask = landmarks[:,0] <5672
     # landmarks = landmarks[mask]
+    if landmarks.shape[0] == 0:
+        print("No detections found. Exiting.")
+        return None, None, None, None, None
     landmarks_dict["frame"] = landmarks[:,0]
     landmarks_dict["uv"] = landmarks[:,3:5]#.astype(np.float64)
     landmarks_dict["lonlat"] = landmarks[:,1:3]#.astype(np.float64)
@@ -247,7 +250,6 @@ def read_detections(sample_dets=False, detections=None, orbit_np=None, orbit_fil
     time_idx = np.array(time_idx_new)
     intrinsics = np.genfromtxt("landmarks/intrinsics.csv", delimiter=',')[0] #  might have to specify manually
 
-    # ipdb.set_trace()
     return orbit, landmarks_dict, intrinsics, time_idx, ii
 
 def remove_elems(mask, gt_pos_eci, gt_vel_eci, poses_gt_eci, gt_quat_eci, gt_quat_eci_full, landmarks_xyz, landmarks_uv, intrinsics, gt_acceleration, ii, time_idx):
@@ -922,6 +924,8 @@ def streaming_version(detections=None, orbit_np=None, orbit_file_name=None, dete
     sample_dets = False
     # orbit, landmarks_dict, intrinsics, time_idx, ii = read_data(sample_dets)
     orbit, landmarks_dict, intrinsics, time_idx, ii = read_detections(sample_dets, detections=detections, orbit_np=orbit_np, orbit_file_name=orbit_file_name, detections_file_name=detections_file_name)
+    if orbit is None:
+        return None, None, None
     gt_pos_eci, gt_vel_eci, poses_gt_eci, gt_quat_eci, gt_quat_eci_full, landmarks_xyz, landmarks_uv, intrinsics, gt_acceleration, gt_pos_eci_full = process_ground_truths(orbit, landmarks_dict, intrinsics, dt, time_idx)
 
     ### Obtain acceleration from orbital dynamics and angular velocity from IMU
@@ -1058,32 +1062,44 @@ def streaming_version(detections=None, orbit_np=None, orbit_file_name=None, dete
             times.append(time_prop)
             errors.append(error_prop)
             # ipdb.set_trace()
-    errors = torch.cat(errors)
+    errors = torch.cat(errors).detach().cpu().numpy()
     return errors, first_detection, times
 if __name__ == "__main__":
-    folder = "landmarks/camera_ready/dets_and_poses"
-    id = 92
+    # folder = "landmarks/camera_ready/dets_and_poses_thres_fixed"
+    # # folder = "landmarks/camera_ready/orbits"#_thres"
+    # dets_folder = "00399_errs"#"dets"#"dets/thresh10000"
+    # pose_folder = "00399_orbit_eci_zyxvecs"#"poses"
+    folder = "landmarks/camera_ready/dets_and_poses_longer"
+    dets_folder = ""
+    pose_folder = ""
     times = []
     errors = []
+    first_id = 376#316
+    last_id = 399#22
     # errors, first_detection, times = streaming_version(detections_file_name="landmarks/camera_ready/00000_all_detections.npy", orbit_file_name="landmarks/camera_ready/00000_orbit_eci_zyxvecs.npy")
-    for id in range(92, 114):
+    # for id in range(92, 114):
+    for id in range(first_id, last_id+1):
         print("sequence : ", id)
+        id = 509
         id_str = str(id).zfill(3)
         # check if f"{folder}/tmp_dets/00{id_str}_all_detections.npy" exists
-        if not os.path.exists(f"{folder}/tmp_dets/00{id_str}_all_detections.npy"):
+        # ipdb.set_trace()
+        if not os.path.exists(f"{folder}/{dets_folder}/00{id_str}_all_detections.npy"):
             continue
-        errors_id, first_detection, times_id = streaming_version(detections_file_name=f"{folder}/tmp_dets/00{id_str}_all_detections.npy", orbit_file_name=f"{folder}/tmp_pose/00{id_str}_orbit_eci_zyxvecs.npy")
-        errors.append(errors_id.detach().cpu().numpy())
-        times.append(np.concatenate(times_id))
+        errors_id, first_detection, times_id = streaming_version(detections_file_name=f"{folder}/{dets_folder}/00{id_str}_all_detections.npy", orbit_file_name=f"{folder}/{pose_folder}/00{id_str}_orbit_eci_zyxvecs.npy")
+        if errors_id is not None:
+            errors.append(errors_id)
+            times.append(np.concatenate(times_id))
 
         # clear cpu and gpu memory 
         torch.cuda.empty_cache()
         gc.collect()
 
-    # import matplotlib.pyplot as plt
-    # ipdb.set_trace()
-    np.save(folder + "/errors.npy", np.array(errors, dtype=object), allow_pickle=True)
-    np.save(folder + "/times.npy", np.array(times, dtype=object), allow_pickle=True)
+        # import matplotlib.pyplot as plt
+        ipdb.set_trace()
+    save_id = f"alpha1_{last_id}"
+    np.save(folder + f"/errors_{save_id}.npy", np.array(errors, dtype=object), allow_pickle=True)
+    np.save(folder + f"/times_{save_id}.npy", np.array(times, dtype=object), allow_pickle=True)
 
     # ipdb.set_trace()
     # plt.plot(errors.detach().cpu().numpy())

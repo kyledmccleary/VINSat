@@ -575,14 +575,14 @@ def predict_gpu(states, imu_meas, times, quat_coeff, vel_coeff, dt=1, jacobian=T
     with torch.no_grad():
         res_pred, pose_pred, vel_pred = res_preds(states.cuda())#, jacobian)
         res_pred = res_pred.cpu()
-    # print("finished dynamics propagation")
+    print("finished dynamics propagation")
     if jacobian:
         Gq = attitude_jacobian(states[:,:,3:7])
         Jf = torch.autograd.functional.jacobian(res_preds_sum, states.reshape(bsz, -1).cuda(), vectorize=True).reshape(bsz, -1, 10).cpu()
         GqJ = Gq[:, None].repeat(bsz, num_res, 1, 1, 1).reshape(bsz, -1, 4, 3)
         Jf = torch.cat([Jf[:,:,:3], (Jf[:,:,3:7,None] * GqJ).sum(dim=2), Jf[:,:,7:]], dim=2)
         Jf = Jf.reshape(bsz, num_res, N*9)
-        # print("finished jacobian computation")
+        print("finished jacobian computation")
         if GN_quat:
             Jf_quat = torch.autograd.functional.jacobian(res_preds_sum_quat, states.reshape(bsz, -1), vectorize=True).reshape(bsz, -1, 7)
             GqJ = Gq[:, None].repeat(bsz, N-1, 1, 1, 1).reshape(bsz, -1, 4, 3)
@@ -596,7 +596,7 @@ def predict_gpu(states, imu_meas, times, quat_coeff, vel_coeff, dt=1, jacobian=T
             Hdiff = torch.autograd.functional.jacobian(res_preds_sum_grad, states[:, :, :].reshape(bsz, -1).cuda(), vectorize=True).reshape(bsz, N, 9, N, 10).cpu()
             Hq_full = torch.cat([Hdiff[..., :3], (Hdiff[..., 3:7, None]*Gq[:,None,None]).sum(dim=-2), Hdiff[..., 7:]], dim=-1).reshape(bsz, N, 9, N, 9)
             Hq_full = Hq_full.reshape(bsz, N*9, N*9)
-        # print("finished hessian computation")
+        print("finished hessian computation")
         return res_pred, pose_pred, vel_pred, 0, 0, Jf, Hq_full, qgrad
     
     return res_pred, pose_pred, vel_pred

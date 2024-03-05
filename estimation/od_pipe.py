@@ -207,14 +207,22 @@ def read_detections(sample_dets=False, detections=None, orbit_np=None, orbit_fil
     # mask = ((landmarks[:,0] <5072)*1.0 + (landmarks[:,0] > 9600)*1.0) > 0
     # mask = landmarks[:,0] <5672
     # landmarks = landmarks[mask]
+    skip_frames = 5
     if landmarks.shape[0] == 0:
         print("No detections found. Exiting.")
         return None, None, None, None, None
+    
+    time_idx = np.unique(landmarks[:,0]).astype(np.int64)
+    if skip_frames > 1:
+        time_idx = time_idx[time_idx%skip_frames==0]
+        # remove landmarks corresponding to skipped time_idx
+        mask = np.isin(landmarks[:,0], time_idx)
+        landmarks = landmarks[mask]
     landmarks_dict["frame"] = landmarks[:,0]
     landmarks_dict["uv"] = landmarks[:,3:5]#.astype(np.float64)
     landmarks_dict["lonlat"] = landmarks[:,1:3]#.astype(np.float64)
     landmarks_dict["confidence"] = landmarks[:,5]#.astype(np.float64)
-    time_idx = np.unique(landmarks[:,0]).astype(np.int64)
+
     ii = []
     filler_idx = time_idx.min()//1000 + 1
     filler_offset = 0
@@ -897,14 +905,15 @@ def streaming_debugging():
         ipdb.set_trace()
 
 
-def identify_next_batch_new(ii, time_idx, i, t):
+def identify_next_batch_new(ii, time_idx, i, t, patch_id):
     contiguous_patch_count = 0
     for j in range(i+1, len(ii)):
         if time_idx[ii[j]] - time_idx[ii[j-1]] < 100:
             contiguous_patch_count += 1
         if time_idx[ii[j]] - time_idx[ii[j-1]] > 200 and contiguous_patch_count > 4:
-            return ii[j-1]+1, j, False
-    return ii[-1]+1, len(ii), True
+            return ii[j-1]+1, j, False, ii[j]
+        
+    return ii[-1]+1, len(ii), True, ii[-1]
 
 def compute_residuals(states, gt_states):
     r = (states - gt_states)[...,:3].reshape(-1, 3).norm(dim=-1)
@@ -983,15 +992,23 @@ def streaming_version(detections=None, orbit_np=None, orbit_file_name=None, dete
 
     t = 0
     i = 0
+    i_start = 0
+    t_start = 0
+    t_next = 0
     seq_end = False
     patch_id = 0
     errors = []
     times = []
+    t_init_lists = []
+    i_init_lists = []
+    printi = False
     # ipdb.set_trace()
     while not seq_end:
         t_init = t
         i_init = i
-        t_final, i_final, seq_end = identify_next_batch_new(ii, time_idx, i, t)
+        t_init_lists.append(t_next)
+        i_init_lists.append(i_init)
+        t_final, i_final, seq_end, t_next = identify_next_batch_new(ii, time_idx, i, t, patch_id)
         t = t_final
         i = i_final
         if patch_id == 0:
@@ -1032,16 +1049,51 @@ def streaming_version(detections=None, orbit_np=None, orbit_file_name=None, dete
             times.append(time_prop)
             errors.append(error_prop)
             # ipdb.set_trace()
+        if patch_id > 2:
+            t_start = t_init_lists[-3]
+            i_start = i_init_lists[-3]
+            states_t_window = states_t[:, t_start:]
+            velocities_t_window = velocities_t[:, t_start:]
+            imu_meas_t_window = imu_meas_t[:, t_start:]
+            intrinsics_t_window = intrinsics_t[:, t_start:]
+            ii_t_window = ii_t[i_start:] - ii_t[i_start]
+            time_idx_t_window = time_idx_t[t_start:]
+            poses_gt_eci_t_window = poses_gt_eci_t[t_start:]   
+            # ipdb.set_trace()
+            print(ii_t_window.shape, states_t_window.shape)
+        else:
+            t_start = 0
+            i_start = 0
+            states_t_window = states_t
+            velocities_t_window = velocities_t
+            imu_meas_t_window = imu_meas_t
+            intrinsics_t_window = intrinsics_t
+            ii_t_window = ii_t
+            time_idx_t_window = time_idx_t
+            poses_gt_eci_t_window = poses_gt_eci_t
+
+        # if patch_id == 5:
+        #     printi = True
+        # if patch_id == 8:
+        #     ipdb.set_trace()
         # print("interval : ", t_init, t_final, time_idx_t)
         # confidences_t = confidences[i_init:i_final]
-        lamda_init_t = lamda_init
+        lamda_init_t = 1e-4#lamda_init
         states_t_prior = states_t.clone()
         velocities_t_prior = velocities_t.clone()
         for iter in range(num_iters):
             if patch_id == 0:
-                states_t, velocities_t, lamda_init_t, last_hessian = BA(iter, states_t, velocities_t, imu_meas_t, landmarks_uv[:, :i_final], landmarks_xyz[:, :i_final], ii_t, time_idx_t, intrinsics_t, confidences[:i_final], Sigma, V, lamda_init_t, poses_gt_eci_t, initialize=(iter<10))
+                states_t_window, velocities_t_window, lamda_init_t, last_hessian = BA(iter, states_t_window, velocities_t_window, imu_meas_t_window, landmarks_uv[:, i_start:i_final], landmarks_xyz[:, i_start:i_final], ii_t_window, time_idx_t_window, intrinsics_t_window, confidences[i_start:i_final], Sigma, V, lamda_init_t, poses_gt_eci_t_window, initialize=(iter<10))
             else:
-                states_t, velocities_t, lamda_init_t, last_hessian = BA(iter, states_t, velocities_t, imu_meas_t, landmarks_uv[:, :i_final], landmarks_xyz[:, :i_final], ii_t, time_idx_t, intrinsics_t, confidences[:i_final], Sigma, V, lamda_init_t, poses_gt_eci_t, initialize=False)
+                states_t_window, velocities_t_window, lamda_init_t, last_hessian = BA(iter, states_t_window, velocities_t_window,  imu_meas_t_window, landmarks_uv[:, i_start:i_final], landmarks_xyz[:, i_start:i_final], ii_t_window, time_idx_t_window, intrinsics_t_window, confidences[i_start:i_final], Sigma, V, lamda_init_t, poses_gt_eci_t_window, initialize=False, printi=printi)
+        
+        if patch_id > 2:
+            states_t[:, t_start:] = states_t_window
+            velocities_t[:, t_start:] = velocities_t_window
+        else:
+            states_t = states_t_window
+            velocities_t = velocities_t_window
+
         patch_id += 1
         error_t = (states_t[..., :3].reshape(-1, 3)[-1:] - poses_gt_eci_t[-1:, :3]).norm(dim=-1)
         errors.append(error_t)
@@ -1070,17 +1122,17 @@ if __name__ == "__main__":
     # dets_folder = "00399_errs"#"dets"#"dets/thresh10000"
     # pose_folder = "00399_orbit_eci_zyxvecs"#"poses"
     folder = "landmarks/camera_ready/dets_and_poses_longer"
-    dets_folder = ""
-    pose_folder = ""
+    dets_folder = ""#00510_all_detections"
+    pose_folder = ""#00510_orbit_eci_zyxvecs"
     times = []
     errors = []
-    first_id = 376#316
-    last_id = 399#22
+    first_id = 511#316
+    last_id = 600#22
     # errors, first_detection, times = streaming_version(detections_file_name="landmarks/camera_ready/00000_all_detections.npy", orbit_file_name="landmarks/camera_ready/00000_orbit_eci_zyxvecs.npy")
     # for id in range(92, 114):
     for id in range(first_id, last_id+1):
         print("sequence : ", id)
-        id = 509
+        id = 500
         id_str = str(id).zfill(3)
         # check if f"{folder}/tmp_dets/00{id_str}_all_detections.npy" exists
         # ipdb.set_trace()

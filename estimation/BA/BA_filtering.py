@@ -1,7 +1,7 @@
 import torch
 from BA.BA_utils import *
 
-def BA(iter, states, velocities, imu_meas, landmarks, landmarks_xyz, ii, time_idx, intrinsics, confidences, Sigma, V, lamda_init, poses_gt_eci, initialize=False):
+def BA(iter, states, velocities, imu_meas, landmarks, landmarks_xyz, ii, time_idx, intrinsics, confidences, Sigma, V, lamda_init, poses_gt_eci, initialize=False, printi=False):
 	states = states.double()
 	v = velocities.double()
 	imu_meas = imu_meas.double()
@@ -49,6 +49,8 @@ def BA(iter, states, velocities, imu_meas, landmarks, landmarks_xyz, ii, time_id
 
 	lamda = lamda_init
 	init_residual = torch.cat([r_obs.reshape(-1), r_pred.reshape(-1)*np.sqrt(Sigma)], dim = 0).abs().mean()
+	if printi:
+		print("lamda: ", lamda, r_pred.abs().mean(), r_obs.abs().mean())
 	while True:
 
 		JTwJ =  torch.eye(n*dim)[None]*lamda+JgTwJg + JfTwJf + Sigma*Hq
@@ -67,13 +69,17 @@ def BA(iter, states, velocities, imu_meas, landmarks, landmarks_xyz, ii, time_id
 		r_pred1 = r_pred1[:, :,  :dim].reshape(bsz, -1) * np.sqrt(Sigma)
 		r_obs1 = r_obs1.reshape(bsz, -1)
 		residual = torch.cat([r_obs1, r_pred1], dim = 1)
-		# print("lamda: ", lamda, r_pred1.abs().mean(), r_obs1.abs().mean())
+		if printi:
+			print(iter, "lamda: ", lamda, r_pred1.abs().mean(), r_obs1.abs().mean())
 
 		lamda = lamda*10
 		if (residual.abs().mean()) < init_residual:
 			break
+		# else:
+		# 	ipdb.set_trace()
 		if lamda > 1e4:
 			print("lamda too large")
+			ipdb.set_trace()
 			break
 		
 	lamda_init = max(min(1e-1, lamda*0.01), 1e-4)

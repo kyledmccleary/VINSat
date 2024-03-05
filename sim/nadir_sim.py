@@ -205,7 +205,7 @@ def eval_px_error(cls, lon, lat, xc, yc, cam):
 
 def run_sim(cur_iter, orbit_num):
     grid = getMGRS()
-    orbit_ecef, orbit_eci, tsamp, orbit_eci_q = get_orbit(54000)
+    orbit_ecef, orbit_eci, tsamp, orbit_eci_q = get_orbit(21600)
     nadir_attitude = get_nadir_attitude(orbit_eci)
     dir_vec, up_vec, right_vec = get_nadir_attitude_vectors(orbit_ecef)
     dir_vec_eci, up_vec_eci, right_vec_eci = get_nadir_attitude_vectors(orbit_eci)
@@ -249,7 +249,7 @@ def run_sim(cur_iter, orbit_num):
     in_region = False
     satim = None
 
-    im_sample_rate = 1
+    im_sample_rate = 5
 
     with tqdm(total=len(nadir_orbit_ecef), desc='Orbit #' + str(orbit_num).zfill(5), position=cur_iter) as pbar:
         for i, pose in enumerate(nadir_orbit_ecef):   
@@ -279,7 +279,9 @@ def run_sim(cur_iter, orbit_num):
             # if ctr_region in regions:
             #     in_timesteps[i] = True
             #     img= satcam.get_image(1)
-            if satcam.check_for_all_landmarks():
+            lds_in_view = satcam.check_for_all_landmarks()
+            dets = []
+            if lds_in_view:
                 # in_timesteps[i] = True
                 #ctr_region = satcam.get_region(lons[i], lats[i])
                 #satim, window_transform = satcam.get_image(ctr_region)      
@@ -351,17 +353,7 @@ def run_sim(cur_iter, orbit_num):
                                     outim = cv2.circle(outim, (int(px_xval), int(px_yval)), 10, (0,255,0), -1)        
                                     if check_err:
                                         outim = cv2.circle(outim, (int(clslon_px), int(clslat_px)), 10, (0,0,255), -1)
-                                        outim = cv2.line(outim, (int(px_xval), int(px_yval)), (int(clslon_px), int(clslat_px)), (255,0,0), 3)                                  
-                if satim is not None and in_region is False:
-                    in_region = True
-                    cur_region = satcam.get_region(lons[i], lats[i])
-                elif satim is None and in_region is True:                
-                    in_region = False
-                    region_pass_count += 1
-                elif satim is not None and in_region is True:
-                    pass
-                else:
-                    in_region = False
+                                        outim = cv2.line(outim, (int(px_xval), int(px_yval)), (int(clslon_px), int(clslat_px)), (255,0,0), 3)                                     
                 if savevid: #and big_satim is not None:
                     if video is None:
                         video = cv2.VideoWriter('orbits/demos/' + vidname, 0, 5, (vid_w,vid_h))
@@ -372,10 +364,35 @@ def run_sim(cur_iter, orbit_num):
                     cv2.imshow('satim', big_satim)
                 big_satim = None
                 satim = None
-            if region_pass_count > 2:
-                break
-            elif region_pass_count > 1 and i > 21600:
-                break
+            # if dets is None:
+            #     dets = []
+            # if lds_in_view and len(dets) > 0 and not in_region:
+            #     in_region = True
+            #     tot_dets = len(dets)
+            # elif not lds_in_view and in_region:
+            #     in_region = False
+            #     if tot_dets > 20:
+            #         region_pass_count += 1
+            # elif lds_in_view and in_region:
+            #     tot_dets += len(dets)
+            # else:
+            #     in_region = False
+
+            # # if satim is not None and in_region is False:
+            # #     in_region = True
+            # #     cur_region = satcam.get_region(lons[i], lats[i])
+            # # elif satim is None and in_region is True:                
+            # #     in_region = False
+            # #     region_pass_count += 1
+            # # elif satim is not None and in_region is True:
+            # #     pass
+            # # else:
+            # #     in_region = False
+            
+            # if region_pass_count > 2:
+            #     break
+            # elif region_pass_count > 1 and i > 21600:
+            #     break
             pbar.update(im_sample_rate)
         np.save(detection_path + '/' + str(orbit_num).zfill(5) + '_inlier_detections.npy', inlier_detections)
         np.save(detection_path + '/' + str(orbit_num).zfill(5) + '_all_detections.npy', all_detections)   
@@ -408,7 +425,7 @@ def run_sim(cur_iter, orbit_num):
         #     f.write(out)
 
 if __name__ == '__main__':
-    iterable = range(603, 1000)
+    iterable = range(750, 1000)
     # ps = int(np.ceil(len(iterable)/3)) * [1, 2, 3]
     # ps = ps[:len(iterable)]
     for i, iter in enumerate(iterable):

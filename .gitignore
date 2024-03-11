@@ -9,7 +9,6 @@ sim/orbits/demos/*
 eval/test_dataset/*
 01000_pose_skip.json
 */__pycache__/*
-*.ipynb
 sim/orbits/detections/*
 sim/*.avi
 sim2/region_ims/*

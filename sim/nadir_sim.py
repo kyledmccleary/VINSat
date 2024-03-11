@@ -153,6 +153,7 @@ def fit_lat(xs, ys, lats):
 def get_detections(img, region, window_transform, cam):
     model_path = 'models/' + region + '.pt'
     model = YOLO(model_path)
+    model = model.to('cuda')
     conf_threshold = float(np.load('best_confs/' + region + '_best_conf.npy'))
     best_classes = np.load('best_classes/' + region + '_best_classes.npy')
     if os.path.exists('bad_classes/' + region + '_bad_classes.npy'):
@@ -425,7 +426,7 @@ def run_sim(cur_iter, orbit_num):
         #     f.write(out)
 
 if __name__ == '__main__':
-    iterable = range(750, 1000)
+    iterable = range(960, 1000)
     # ps = int(np.ceil(len(iterable)/3)) * [1, 2, 3]
     # ps = ps[:len(iterable)]
     for i, iter in enumerate(iterable):

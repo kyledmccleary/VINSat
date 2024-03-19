@@ -1,0 +1,3 @@
+train: ./10S/images
+val: ./10S/images
+nc: 500

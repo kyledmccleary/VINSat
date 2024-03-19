@@ -6,7 +6,8 @@ sim/region_ims/*
 sim/region_ims_4326/*
 sim/orbits/czm/*
 sim/orbits/demos/*
-eval/test_dataset/*
+eval/datasets/*
+eval/runs/*
 01000_pose_skip.json
 */__pycache__/*
 sim/orbits/detections/*

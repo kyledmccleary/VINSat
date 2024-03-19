@@ -124,7 +124,7 @@ class SatCam:
 
     def cast_ray_to_earth(self, vector):
         semimaj = a = b = 6378137
-        semimin = c = 6356752.314245
+        semimin = c = 6356752.31424518
         x, y, z = self.sat_pos
         u = vector[0]
         v = vector[1]

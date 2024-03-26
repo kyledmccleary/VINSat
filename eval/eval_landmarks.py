@@ -5,6 +5,9 @@ import argparse
 from tqdm.contrib.concurrent import process_map
 import torch
 import numpy as np
+import pandas as pd
+
+#torch.set_default_tensor_type('torch.FloatTensor')  # Sets default tensor type to CPU
 
 def parse_args():
     """
@@ -54,7 +57,7 @@ def load_model(model_path):
     Returns:
         ultralytics.YOLO: The loaded model.
     """
-    model = YOLO(model_path)
+    model = YOLO(model_path)#.to('cpu')
     return model
 
 def get_err(err_path):
@@ -104,8 +107,11 @@ def get_dets():
     model = load_model(args.model_path)
     results = model(args.im_path, conf=args.conf_threshold)
     dets = []
+    print("total result:", len(results))
     for result in results:
+        print("Detected landmarks:", len(result.boxes))
         if len(result.boxes) > 0:
+            print("     Detected classes:", result.boxes.cls)
             classes = result.boxes.cls
             confs = result.boxes.conf
             xcns = result.boxes.xywhn[:, 0]
@@ -115,11 +121,12 @@ def get_dets():
             im_ws = torch.ones_like(ycns) * im_w
             im_dets = torch.stack([classes, xcns, ycns, im_ws, im_hs, confs], dim=1)
             dets.append(im_dets)
+            print("     # of classes pulled pixels from:", len(im_dets))
         else:
             dets.append([])
     return dets
 
-def calculate_error(labels, dets):
+def calculate_error(labels, dets, lab_paths):
     """
     Calculate the error between the detections and the labels.
     
@@ -131,7 +138,14 @@ def calculate_error(labels, dets):
         numpy.ndarray: The error.
     """
     err_list = []
-    for label, det in zip(labels, dets):
+    empt_list = []
+    count = 0
+    img_index = 0
+
+    for label, det, lab_path in zip(labels, dets, lab_paths):
+        img_index = img_index + 1
+        #print(f"img {img_index} # of detections:", len(det))
+
         if len(det) > 0:
             if len(label) > 0:
                 label_classes = label[:, 0]
@@ -156,15 +170,33 @@ def calculate_error(labels, dets):
                     det_conf = float(det_conf) 
                     err_list.append([det_cl, -1, det_conf])
         else:
+            print(f"{os.path.basename(lab_path)} has no detections")
             if len(label) > 0:
+                print(f"{os.path.basename(lab_path)} has labels: ", len(label))
+                count = count + 1
+
                 label_classes = label[:, 0]
                 for label_cl, label_x, label_y in label:
                     label_cl = int(label_cl)
                     err_list.append([label_cl, -1, -1])
+
+                    empt_list.append([label_cl, -1, -1])
+
+    print("Number of empty detections:", count)
+    print("Number of empty classes:", len(empt_list))
+
     err_arr = np.array(err_list)
+
+    
     if args.save_err:
-        np.save(args.output_path, err_arr)
-        print('Error saved to {}'.format(args.output_path, 'err.npy'))
+        npy_path = args.output_path
+        np.save(npy_path, err_arr)
+        print('Error saved to {}'.format(npy_path))
+
+        # Save as a CSV file
+        csv_path = args.output_path.replace('.npy', '.csv')
+        np.savetxt(csv_path, err_arr, delimiter=',', fmt='%s')
+        print('Error saved to {}'.format(csv_path))
     return np.array(err_arr)
 
 def get_class_values(err):
@@ -268,7 +300,7 @@ if __name__ == '__main__':
         lab_paths = [os.path.join(lab_folder, x) for x in lab_paths]
         labels = [read_labels(lab_path) for lab_path in lab_paths] 
         dets = get_dets()
-        err = calculate_error(labels, dets)
+        err = calculate_error(labels, dets, lab_paths)
     elif(args.err_path is not None):
         err = get_err(args.err_path)
     else:
@@ -277,7 +309,15 @@ if __name__ == '__main__':
         best_classes, best_conf = get_best_conf_maximize_classes(err)
         if args.save_best_conf:
             np.save(args.best_conf_path, best_conf)
-            np.save(args.best_classes_path, np.unique(best_classes[:, 0]))    
+            np.save(args.best_classes_path, np.unique(best_classes[:, 0])) 
+            best_classes_csv_path = args.best_classes_path.replace('.npy', '.csv')
+            best_conf_csv_path = args.best_conf_path.replace('.npy', '.csv')
+            # Save best_classes as CSV
+            best_classes_df = pd.DataFrame(best_classes, columns=['Class', 'Mean Error', 'Median Error', 'Mean Confidence', 'Missed Detections', 'Extra Detections'])
+            best_classes_df.to_csv(best_classes_csv_path, index=False)
+            # Save best_conf as a single-value CSV
+            best_conf_df = pd.DataFrame([best_conf], columns=['Best Confidence Threshold'])
+            best_conf_df.to_csv(best_conf_csv_path, index=False)
         print('Best confidence threshold:', best_conf)
         print('Classes with mean error below {} pixels:'.format(args.px_threshold))
         print(best_classes)

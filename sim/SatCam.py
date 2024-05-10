@@ -195,7 +195,8 @@ class SatCam:
             {"proj":'latlong', "ellps":'WGS84', "datum":'WGS84'},
             {"proj":'geocent', "ellps":'WGS84', "datum":'WGS84'}       
         )
-        x, y, z = transformer.transform(lon, lat, 0, radians=False)
+        zs = np.zeros(len(lon))
+        x, y, z = transformer.transform(lon, lat, zs, radians=False)
         px = self.ecef_pos_to_px((x, y, z))
         return px
 

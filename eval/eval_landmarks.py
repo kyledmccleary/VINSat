@@ -29,6 +29,7 @@ def parse_args():
     parser.add_argument('--best_conf_path', type=str, default='best_conf.npy', help='Path to best confidence threshold')
     parser.add_argument('--best_classes_path', type=str, default='best_classes.npy', help='Path to best classes')
     parser.add_argument('--evaluate_test', action='store_true', help='Evaluate the test set')
+    parser.add_argument('--calculate_xy_err', action='store_true', help='Calculate the xy error')
     parsed_args = parser.parse_args()
 
     if parsed_args.calculate_err and parsed_args.err_path is not None:
@@ -167,6 +168,33 @@ def calculate_error(labels, dets):
         print('Error saved to {}'.format(args.output_path, 'err.npy'))
     return np.array(err_arr)
 
+def calc_xy_err(labels, dets):
+    err_list = []
+    for label, det in zip(labels, dets):
+        if len(det) > 0:
+            if len(label) > 0:
+                label_classes = label[:, 0]
+                label_xcs = label[:, 1]
+                label_ycs = label[:, 2]
+                for det_cl, det_xc, det_yc, det_im_w, det_im_h, det_conf in det:
+                    det_cl = int(det_cl)
+                    det_conf = float(det_conf)
+                    if det_cl in label_classes:
+                        label_idx = np.where(label_classes == det_cl)[0][0]
+                        label_x = label_xcs[label_idx]
+                        label_y = label_ycs[label_idx]
+                        xerr = (det_xc - label_x) * det_im_w
+                        xerr = xerr.cpu().numpy()
+                        yerr = (det_yc - label_y) * det_im_h
+                        yerr = yerr.cpu().numpy()
+                        err_list.append([det_cl, xerr, yerr, det_conf])
+    err_arr = np.array(err_list)
+    if args.save_err:
+        np.save(args.output_path, err_arr)
+        print('Error saved to {}'.format(args.output_path, 'xyerr.npy'))
+    return np.array(err_arr)
+
+
 def get_class_values(err):
     """
     Get the class values from the error file.
@@ -269,6 +297,13 @@ if __name__ == '__main__':
         labels = [read_labels(lab_path) for lab_path in lab_paths] 
         dets = get_dets()
         err = calculate_error(labels, dets)
+    elif(args.calculate_xy_err):
+        lab_folder = args.lab_path
+        lab_paths = os.listdir(lab_folder)
+        lab_paths = [os.path.join(lab_folder, x) for x in lab_paths]
+        labels = [read_labels(lab_path) for lab_path in lab_paths] 
+        dets = get_dets()
+        err = calc_xy_err(labels, dets)
     elif(args.err_path is not None):
         err = get_err(args.err_path)
     else:

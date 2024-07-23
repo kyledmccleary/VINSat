@@ -207,7 +207,7 @@ def read_detections(sample_dets=False, detections=None, orbit_np=None, orbit_fil
     # mask = ((landmarks[:,0] <5072)*1.0 + (landmarks[:,0] > 9600)*1.0) > 0
     # mask = landmarks[:,0] <5672
     # landmarks = landmarks[mask]
-    skip_frames = 5
+    skip_frames = 1
     if landmarks.shape[0] == 0:
         print("No detections found. Exiting.")
         return None, None, None, None, None
@@ -976,7 +976,7 @@ def streaming_version(detections=None, orbit_np=None, orbit_file_name=None, dete
     orientation_offset = torch.randn([T, 3])*0.2
     velocity_offset = torch.randn([T, 3])*velocities.abs().mean()*0.1
     position = poses_gt_eci.double()[:, :3] + position_offset
-    orientation = quaternion_exp(quaternion_log(poses_gt_eci.double()[:, 3:]) + orientation_offset)
+    orientation = poses_gt_eci.double()[:, 3:]# quaternion_exp(quaternion_log(poses_gt_eci.double()[:, 3:]) + orientation_offset)
     vels = velocities.double() + velocity_offset.unsqueeze(0)
     poses = torch.cat([position, orientation], dim=1).unsqueeze(0)
     states = torch.cat([poses, vels], dim=-1)
@@ -1121,24 +1121,25 @@ if __name__ == "__main__":
     # # folder = "landmarks/camera_ready/orbits"#_thres"
     # dets_folder = "00399_errs"#"dets"#"dets/thresh10000"
     # pose_folder = "00399_orbit_eci_zyxvecs"#"poses"
-    folder = "landmarks/camera_ready/dets_and_poses_longer"
-    dets_folder = ""#00510_all_detections"
-    pose_folder = ""#00510_orbit_eci_zyxvecs"
+    # folder = "landmarks/camera_ready/dets_and_poses_longer"
+    folder = "landmarks/camera_ready/dets_and_poses_4orbits"
+    dets_folder = "dets"#00510_all_detections"
+    pose_folder = "eci"#00510_orbit_eci_zyxvecs"
     times = []
     errors = []
-    first_id = 511#316
-    last_id = 600#22
+    first_id = 3251#316
+    last_id = 3300#22
     # errors, first_detection, times = streaming_version(detections_file_name="landmarks/camera_ready/00000_all_detections.npy", orbit_file_name="landmarks/camera_ready/00000_orbit_eci_zyxvecs.npy")
     # for id in range(92, 114):
     for id in range(first_id, last_id+1):
         print("sequence : ", id)
-        id = 500
-        id_str = str(id).zfill(3)
+        # id = 500
+        id_str = str(id).zfill(5)
         # check if f"{folder}/tmp_dets/00{id_str}_all_detections.npy" exists
         # ipdb.set_trace()
-        if not os.path.exists(f"{folder}/{dets_folder}/00{id_str}_all_detections.npy"):
+        if not os.path.exists(f"{folder}/{dets_folder}/{id_str}_all_detections.npy"):
             continue
-        errors_id, first_detection, times_id = streaming_version(detections_file_name=f"{folder}/{dets_folder}/00{id_str}_all_detections.npy", orbit_file_name=f"{folder}/{pose_folder}/00{id_str}_orbit_eci_zyxvecs.npy")
+        errors_id, first_detection, times_id = streaming_version(detections_file_name=f"{folder}/{dets_folder}/{id_str}_all_detections.npy", orbit_file_name=f"{folder}/{pose_folder}/{id_str}_orbit_eci_zyxvecs.npy")
         if errors_id is not None:
             errors.append(errors_id)
             times.append(np.concatenate(times_id))
@@ -1148,11 +1149,14 @@ if __name__ == "__main__":
         gc.collect()
 
         # import matplotlib.pyplot as plt
-        ipdb.set_trace()
+        # ipdb.set_trace()
+        if id%100 == 0:
+            save_id = f"alpha1_{last_id}"
+            np.save(folder + f"/errors_{save_id}.npy", np.array(errors, dtype=object), allow_pickle=True)
+            np.save(folder + f"/times_{save_id}.npy", np.array(times, dtype=object), allow_pickle=True)
     save_id = f"alpha1_{last_id}"
     np.save(folder + f"/errors_{save_id}.npy", np.array(errors, dtype=object), allow_pickle=True)
     np.save(folder + f"/times_{save_id}.npy", np.array(times, dtype=object), allow_pickle=True)
-
     # ipdb.set_trace()
     # plt.plot(errors.detach().cpu().numpy())
     # plt.show()

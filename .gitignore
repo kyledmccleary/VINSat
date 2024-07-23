@@ -12,3 +12,4 @@ eval/test_dataset/*
 *.ipynb
 sim/orbits/detections/*
 sim/*.avi
+estimation/landmarks/*
